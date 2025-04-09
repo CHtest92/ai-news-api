@@ -35,6 +35,7 @@ paths:
             application/json:
               schema:
                 type: array
+                maxItems: 15
                 items:
                   type: object
                   properties:
@@ -76,8 +77,7 @@ def get_published_time(entry):
 
 def get_relevance_score(entry):
     content = (entry.title + entry.get("summary", "")).lower()
-    score = sum(1 for k in IMPORTANT_KEYWORDS if k in content)
-    return score
+    return sum(1 for k in IMPORTANT_KEYWORDS if k in content)
 
 @app.route("/smart_news")
 def smart_news():
@@ -104,7 +104,6 @@ def smart_news():
                 "relevance": relevance
             })
 
-    # 控制每家媒體最多取 SOURCE_LIMIT 篇
     all_news = []
     for source in grouped_by_source:
         entries = sorted(grouped_by_source[source], key=lambda x: (-x["relevance"], -x["published_datetime"].timestamp()))
