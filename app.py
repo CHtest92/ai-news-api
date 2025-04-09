@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 import feedparser
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -12,6 +12,44 @@ IMPORTANT_KEYWORDS = [
     "生成式", "openai", "chatgpt", "大模型", "llm", "ai創作", "ai轉譯",
     "copilot", "語音識別", "ai助手", "ai應用", "prompt", "gpt", "text-to"
 ]
+
+OPENAPI_YAML = """
+openapi: 3.0.0
+info:
+  title: AI News Briefing API
+  version: 1.0.0
+servers:
+  - url: https://ai-news-api.onrender.com
+paths:
+  /smart_news:
+    get:
+      summary: Get the latest 15 AI news articles within 12 hours, filtered and sorted.
+      operationId: getSmartNews
+      responses:
+        '200':
+          description: A list of AI news articles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    title:
+                      type: string
+                    translated_title:
+                      type: string
+                    summary:
+                      type: string
+                    translated_summary:
+                      type: string
+                    link:
+                      type: string
+                    published:
+                      type: string
+                    source:
+                      type: string
+"""
 
 def clean_html(html):
     soup = BeautifulSoup(html, "html.parser")
@@ -112,6 +150,10 @@ def search_news():
         if len(results) >= 10:
             break
     return jsonify(results)
+
+@app.route("/openapi.yaml")
+def openapi_spec():
+    return Response(OPENAPI_YAML, mimetype="text/yaml")
 
 @app.errorhandler(500)
 def server_error(e):
