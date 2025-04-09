@@ -14,7 +14,7 @@ IMPORTANT_KEYWORDS = [
 ]
 
 OPENAPI_YAML = """
-openapi: 3.0.0
+openapi: 3.1.0
 info:
   title: AI News Briefing API
   version: 1.0.0
