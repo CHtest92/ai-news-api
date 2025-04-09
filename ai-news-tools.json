@@ -1,0 +1,117 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AI News Briefing API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://ai-news-api-6x8n.onrender.com"
+    }
+  ],
+  "paths": {
+    "/smart_news": {
+      "get": {
+        "summary": "取得近 12 小時 AI 新聞（最多 10 則）",
+        "operationId": "smartNews",
+        "responses": {
+          "200": {
+            "description": "新聞清單",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "title": { "type": "string" },
+                      "translated_title": { "type": "string" },
+                      "summary": { "type": "string" },
+                      "translated_summary": { "type": "string" },
+                      "link": { "type": "string" },
+                      "published": { "type": "string" },
+                      "source": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/get_news_by_link": {
+      "get": {
+        "summary": "根據新聞網址取得單篇摘要",
+        "operationId": "getNewsByLink",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "新聞摘要",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "title": { "type": "string" },
+                    "translated_title": { "type": "string" },
+                    "summary": { "type": "string" },
+                    "content": { "type": "string" },
+                    "published": { "type": "string" },
+                    "source": { "type": "string" },
+                    "link": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search_news": {
+      "get": {
+        "summary": "搜尋 AI 新聞",
+        "operationId": "searchNews",
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "搜尋結果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "title": { "type": "string" },
+                      "translated_title": { "type": "string" },
+                      "summary": { "type": "string" },
+                      "translated_summary": { "type": "string" },
+                      "link": { "type": "string" },
+                      "published": { "type": "string" },
+                      "source": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

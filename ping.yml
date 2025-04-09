@@ -1,0 +1,12 @@
+name: Keep Render Awake
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # 每 10 分鐘
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Curl /smart_news
+        run: curl -s https://ai-news-api-6x8n.onrender.com/smart_news > /dev/null

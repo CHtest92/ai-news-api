@@ -1,0 +1,5 @@
+Flask==2.3.3
+feedparser==6.0.10
+gunicorn==21.2.0
+beautifulsoup4==4.12.3
+deep-translator==1.11.4
