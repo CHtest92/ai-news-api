@@ -7,6 +7,8 @@ from deep_translator import GoogleTranslator
 app = Flask(__name__)
 RSS_URL = "https://www.inoreader.com/stream/user/1003787482/tag/AI科技?type=rss"
 
+PREFERRED_SOURCES = ["數位時代", "彭博", "IT之家"]
+
 def clean_html(html):
     soup = BeautifulSoup(html, "html.parser")
     for img in soup.find_all("img"):
@@ -29,23 +31,32 @@ def get_published_time(entry):
 def smart_news():
     feed = feedparser.parse(RSS_URL)
     now = datetime.utcnow()
-    result = []
+    filtered = []
     for entry in feed.entries:
         published = get_published_time(entry)
         if (now - published).total_seconds() <= 43200:
             summary = clean_html(entry.get("summary", ""))
-            result.append({
+            filtered.append({
                 "title": entry.title,
                 "translated_title": translate(entry.title),
                 "summary": summary,
                 "translated_summary": translate(summary),
                 "link": entry.link,
                 "published": published.date().isoformat(),
+                "published_datetime": published,
                 "source": entry.get("source", {}).get("title", "Unknown")
             })
-        if len(result) >= 15:
-            break
-    return jsonify(result)
+
+    # 排序邏輯：優先來源 + 發文時間
+    def sort_key(item):
+        priority = 0 if item["source"] in PREFERRED_SOURCES else 1
+        return (priority, -item["published_datetime"].timestamp())
+
+    sorted_news = sorted(filtered, key=sort_key)[:15]
+    for news in sorted_news:
+        del news["published_datetime"]  # 移除排序用欄位
+
+    return jsonify(sorted_news)
 
 @app.route("/get_news_by_link")
 def get_news_by_link():
