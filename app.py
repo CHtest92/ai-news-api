@@ -3,6 +3,7 @@ import feedparser
 from datetime import datetime
 from bs4 import BeautifulSoup
 from deep_translator import GoogleTranslator
+from collections import defaultdict
 
 app = Flask(__name__)
 RSS_URL = "https://www.inoreader.com/stream/user/1003787482/tag/AI科技?type=rss"
@@ -12,6 +13,8 @@ IMPORTANT_KEYWORDS = [
     "生成式", "openai", "chatgpt", "大模型", "llm", "ai創作", "ai轉譯",
     "copilot", "語音識別", "ai助手", "ai應用", "prompt", "gpt", "text-to"
 ]
+SOURCE_LIMIT = 5
+TOTAL_LIMIT = 15
 
 OPENAPI_YAML = """
 openapi: 3.1.0
@@ -23,7 +26,7 @@ servers:
 paths:
   /smart_news:
     get:
-      summary: Get the latest 15 AI news articles within 12 hours, sorted by preferred sources and weighted by relevance.
+      summary: Get the latest 15 AI news articles within 12 hours, sorted by preferred sources and limited per source.
       operationId: getSmartNews
       responses:
         '200':
@@ -48,6 +51,8 @@ paths:
                     published:
                       type: string
                     source:
+                      type: string
+                    markdown_link:
                       type: string
 """
 
@@ -78,24 +83,32 @@ def get_relevance_score(entry):
 def smart_news():
     feed = feedparser.parse(RSS_URL)
     now = datetime.utcnow()
-    filtered = []
+    grouped_by_source = defaultdict(list)
+
     for entry in feed.entries:
         published = get_published_time(entry)
         if (now - published).total_seconds() <= 43200:
             summary = clean_html(entry.get("summary", ""))
             source = entry.get("source", {}).get("title", "Unknown")
             relevance = get_relevance_score(entry)
-            filtered.append({
+            grouped_by_source[source].append({
                 "title": entry.title,
                 "translated_title": translate(entry.title),
                 "summary": summary,
                 "translated_summary": translate(summary),
                 "link": entry.link,
+                "markdown_link": f"[點我看原文]({entry.link})",
                 "published": published.date().isoformat(),
                 "published_datetime": published,
                 "source": source,
                 "relevance": relevance
             })
+
+    # 控制每家媒體最多取 SOURCE_LIMIT 篇
+    all_news = []
+    for source in grouped_by_source:
+        entries = sorted(grouped_by_source[source], key=lambda x: (-x["relevance"], -x["published_datetime"].timestamp()))
+        all_news.extend(entries[:SOURCE_LIMIT])
 
     def sort_key(item):
         try:
@@ -104,7 +117,7 @@ def smart_news():
             priority = len(PREFERRED_SOURCES)
         return (priority, -item["relevance"], -item["published_datetime"].timestamp())
 
-    sorted_news = sorted(filtered, key=sort_key)[:15]
+    sorted_news = sorted(all_news, key=sort_key)[:TOTAL_LIMIT]
     for news in sorted_news:
         del news["published_datetime"]
         del news["relevance"]
@@ -149,7 +162,8 @@ def search_news():
                 "translated_summary": translate(summary),
                 "link": entry.link,
                 "published": get_published_time(entry).date().isoformat(),
-                "source": entry.get("source", {}).get("title", "Unknown")
+                "source": entry.get("source", {}).get("title", "Unknown"),
+                "markdown_link": f"[點我看原文]({entry.link})"
             })
         if len(results) >= 10:
             break
