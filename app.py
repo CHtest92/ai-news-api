@@ -19,7 +19,7 @@ info:
   title: AI News Briefing API
   version: 1.0.0
 servers:
-  - url: https://ai-news-api.onrender.com
+  - url: https://ai-news-api-9r4w.onrender.com
 paths:
   /smart_news:
     get:
