@@ -7,7 +7,11 @@ from deep_translator import GoogleTranslator
 app = Flask(__name__)
 RSS_URL = "https://www.inoreader.com/stream/user/1003787482/tag/AI科技?type=rss"
 
-PREFERRED_SOURCES = ["數位時代", "彭博", "IT之家"]
+PREFERRED_SOURCES = ["數位時代", "彭博", "路透"]
+IMPORTANT_KEYWORDS = [
+    "生成式", "openai", "chatgpt", "大模型", "llm", "ai創作", "ai轉譯",
+    "copilot", "語音識別", "ai助手", "ai應用", "prompt", "gpt", "text-to"
+]
 
 def clean_html(html):
     soup = BeautifulSoup(html, "html.parser")
@@ -27,6 +31,10 @@ def get_published_time(entry):
     except:
         return datetime.utcnow()
 
+def is_relevant(entry):
+    fulltext = (entry.title + entry.get("summary", "")).lower()
+    return any(k in fulltext for k in IMPORTANT_KEYWORDS)
+
 @app.route("/smart_news")
 def smart_news():
     feed = feedparser.parse(RSS_URL)
@@ -34,8 +42,9 @@ def smart_news():
     filtered = []
     for entry in feed.entries:
         published = get_published_time(entry)
-        if (now - published).total_seconds() <= 43200:
+        if (now - published).total_seconds() <= 43200 and is_relevant(entry):
             summary = clean_html(entry.get("summary", ""))
+            source = entry.get("source", {}).get("title", "Unknown")
             filtered.append({
                 "title": entry.title,
                 "translated_title": translate(entry.title),
@@ -44,17 +53,19 @@ def smart_news():
                 "link": entry.link,
                 "published": published.date().isoformat(),
                 "published_datetime": published,
-                "source": entry.get("source", {}).get("title", "Unknown")
+                "source": source
             })
 
-    # 排序邏輯：優先來源 + 發文時間
     def sort_key(item):
-        priority = 0 if item["source"] in PREFERRED_SOURCES else 1
+        try:
+            priority = PREFERRED_SOURCES.index(item["source"])
+        except ValueError:
+            priority = len(PREFERRED_SOURCES)
         return (priority, -item["published_datetime"].timestamp())
 
     sorted_news = sorted(filtered, key=sort_key)[:15]
     for news in sorted_news:
-        del news["published_datetime"]  # 移除排序用欄位
+        del news["published_datetime"]
 
     return jsonify(sorted_news)
 
