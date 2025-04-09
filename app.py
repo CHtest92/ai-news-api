@@ -23,7 +23,7 @@ servers:
 paths:
   /smart_news:
     get:
-      summary: Get the latest 15 AI news articles within 12 hours, filtered and sorted.
+      summary: Get the latest 15 AI news articles within 12 hours, sorted by preferred sources and weighted by relevance.
       operationId: getSmartNews
       responses:
         '200':
@@ -69,9 +69,10 @@ def get_published_time(entry):
     except:
         return datetime.utcnow()
 
-def is_relevant(entry):
-    fulltext = (entry.title + entry.get("summary", "")).lower()
-    return any(k in fulltext for k in IMPORTANT_KEYWORDS)
+def get_relevance_score(entry):
+    content = (entry.title + entry.get("summary", "")).lower()
+    score = sum(1 for k in IMPORTANT_KEYWORDS if k in content)
+    return score
 
 @app.route("/smart_news")
 def smart_news():
@@ -80,9 +81,10 @@ def smart_news():
     filtered = []
     for entry in feed.entries:
         published = get_published_time(entry)
-        if (now - published).total_seconds() <= 43200 and is_relevant(entry):
+        if (now - published).total_seconds() <= 43200:
             summary = clean_html(entry.get("summary", ""))
             source = entry.get("source", {}).get("title", "Unknown")
+            relevance = get_relevance_score(entry)
             filtered.append({
                 "title": entry.title,
                 "translated_title": translate(entry.title),
@@ -91,7 +93,8 @@ def smart_news():
                 "link": entry.link,
                 "published": published.date().isoformat(),
                 "published_datetime": published,
-                "source": source
+                "source": source,
+                "relevance": relevance
             })
 
     def sort_key(item):
@@ -99,11 +102,12 @@ def smart_news():
             priority = PREFERRED_SOURCES.index(item["source"])
         except ValueError:
             priority = len(PREFERRED_SOURCES)
-        return (priority, -item["published_datetime"].timestamp())
+        return (priority, -item["relevance"], -item["published_datetime"].timestamp())
 
     sorted_news = sorted(filtered, key=sort_key)[:15]
     for news in sorted_news:
         del news["published_datetime"]
+        del news["relevance"]
 
     return jsonify(sorted_news)
 
