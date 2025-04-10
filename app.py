@@ -14,6 +14,7 @@ IMPORTANT_KEYWORDS = [
     "copilot", "語音識別", "ai助手", "ai應用", "prompt", "gpt", "text-to"
 ]
 TOTAL_LIMIT = 15
+MIN_RELEVANT_NEWS = 8
 
 OPENAPI_YAML = """
 openapi: 3.1.0
@@ -25,15 +26,16 @@ servers:
 paths:
   /smart_news:
     get:
-      summary: Get the latest 15 AI news articles within 12 hours, sorted by preferred sources and limited per source.
+      summary: Get the latest 15 AI news articles within 12 hours, filtered and sorted.
       operationId: getSmartNews
       responses:
-        '200':
+        "200":
           description: A list of AI news articles
           content:
             application/json:
               schema:
                 type: array
+                minItems: 8
                 maxItems: 15
                 items:
                   type: object
@@ -91,7 +93,7 @@ def get_entry_link(entry):
 def smart_news():
     feed = feedparser.parse(RSS_URL)
     now = datetime.utcnow()
-    grouped_by_source = defaultdict(list)
+    all_entries = []
 
     for entry in feed.entries:
         published = get_published_time(entry)
@@ -103,7 +105,7 @@ def smart_news():
             if not link:
                 continue
             link = link.replace("&amp;", "&")
-            grouped_by_source[source].append({
+            all_entries.append({
                 "title": entry.title,
                 "translated_title": translate(entry.title),
                 "summary": summary,
@@ -116,17 +118,11 @@ def smart_news():
                 "relevance": relevance
             })
 
-    selected_news = []
-    for source, entries in grouped_by_source.items():
-        limit = 5 if source in PREFERRED_SOURCES else 3
-        sorted_entries = sorted(entries, key=lambda x: (-x["relevance"], -x["published_datetime"].timestamp()))
-        selected_news.extend(sorted_entries[:limit])
+    relevant_news = [n for n in all_entries if n["relevance"] > 0]
+    fallback_news = [n for n in all_entries if n["relevance"] == 0]
 
-    relevant_news = [n for n in selected_news if n["relevance"] > 0]
-    fallback_news = [n for n in selected_news if n["relevance"] == 0]
-
-    if len(relevant_news) < 8:
-        need = 8 - len(relevant_news)
+    if len(relevant_news) < MIN_RELEVANT_NEWS:
+        need = MIN_RELEVANT_NEWS - len(relevant_news)
         relevant_news += fallback_news[:need]
         fallback_news = fallback_news[need:]
 
@@ -148,62 +144,9 @@ def smart_news():
 
     return jsonify(sorted_news)
 
-@app.route("/get_news_by_link")
-def get_news_by_link():
-    url = request.args.get("url")
-    if not url:
-        return jsonify({"error": "Missing URL"}), 400
-    feed = feedparser.parse(RSS_URL)
-    for entry in feed.entries:
-        if entry.link == url:
-            summary = clean_html(entry.get("summary", ""))
-            return jsonify({
-                "title": entry.title,
-                "translated_title": translate(entry.title),
-                "summary": summary,
-                "content": summary,
-                "published": get_published_time(entry).date().isoformat(),
-                "source": entry.get("source", {}).get("title", "Unknown"),
-                "link": url
-            })
-    return jsonify({"error": "Article not found", "link": url}), 404
-
-@app.route("/search_news")
-def search_news():
-    keyword = request.args.get("keyword", "")
-    if not keyword:
-        return jsonify({"error": "Missing keyword"}), 400
-    feed = feedparser.parse(RSS_URL)
-    results = []
-    for entry in feed.entries:
-        title = entry.title
-        summary = clean_html(entry.get("summary", ""))
-        if keyword.lower() in title.lower() or keyword.lower() in summary.lower():
-            link = get_entry_link(entry)
-            if not link:
-                continue
-            link = link.replace("&amp;", "&")
-            results.append({
-                "title": title,
-                "translated_title": translate(title),
-                "summary": summary,
-                "translated_summary": translate(summary),
-                "link": link,
-                "published": get_published_time(entry).date().isoformat(),
-                "source": entry.get("source", {}).get("title", "Unknown"),
-                "markdown_link": f"[點我看原文]({link})"
-            })
-        if len(results) >= 10:
-            break
-    return jsonify(results)
-
 @app.route("/openapi.yaml")
 def openapi_spec():
     return Response(OPENAPI_YAML, mimetype="text/yaml")
-
-@app.errorhandler(500)
-def server_error(e):
-    return jsonify({"error": "Render 後端可能在睡覺中，請 30 秒後重試"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
