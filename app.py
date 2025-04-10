@@ -56,6 +56,32 @@ paths:
                       type: string
                     markdown_link:
                       type: string
+  /smart_news_compact:
+    get:
+      summary: Get a simplified list of 15 AI news articles for GPT tools.
+      operationId: getSmartNewsCompact
+      responses:
+        "200":
+          description: A compact list of AI news articles
+          content:
+            application/json:
+              schema:
+                type: array
+                minItems: 8
+                maxItems: 15
+                items:
+                  type: object
+                  properties:
+                    translated_title:
+                      type: string
+                    translated_summary:
+                      type: string
+                    published:
+                      type: string
+                    source:
+                      type: string
+                    markdown_link:
+                      type: string
 """
 
 def clean_html(html):
@@ -89,8 +115,7 @@ def get_entry_link(entry):
         return entry.id
     return ""
 
-@app.route("/smart_news")
-def smart_news():
+def get_filtered_news():
     feed = feedparser.parse(RSS_URL)
     now = datetime.utcnow()
     all_entries = []
@@ -138,11 +163,27 @@ def smart_news():
 
     sorted_news = sorted(final_news, key=sort_key)
 
-    for news in sorted_news:
-        del news["published_datetime"]
-        del news["relevance"]
+    return sorted_news
 
-    return jsonify(sorted_news)
+@app.route("/smart_news")
+def smart_news():
+    news = get_filtered_news()
+    for n in news:
+        del n["published_datetime"]
+        del n["relevance"]
+    return jsonify(news)
+
+@app.route("/smart_news_compact")
+def smart_news_compact():
+    news = get_filtered_news()
+    compact = [{
+        "translated_title": n["translated_title"],
+        "translated_summary": n["translated_summary"],
+        "published": n["published"],
+        "source": n["source"],
+        "markdown_link": n["markdown_link"]
+    } for n in news]
+    return jsonify(compact)
 
 @app.route("/openapi.yaml")
 def openapi_spec():
