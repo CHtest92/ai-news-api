@@ -13,7 +13,6 @@ IMPORTANT_KEYWORDS = [
     "生成式", "openai", "chatgpt", "大模型", "llm", "ai創作", "ai轉譯",
     "copilot", "語音識別", "ai助手", "ai應用", "prompt", "gpt", "text-to"
 ]
-SOURCE_LIMIT = 5
 TOTAL_LIMIT = 15
 
 OPENAPI_YAML = """
@@ -79,6 +78,15 @@ def get_relevance_score(entry):
     content = (entry.title + entry.get("summary", "")).lower()
     return sum(1 for k in IMPORTANT_KEYWORDS if k in content)
 
+def get_entry_link(entry):
+    if hasattr(entry, "link") and entry.link:
+        return entry.link
+    elif hasattr(entry, "links") and entry.links and isinstance(entry.links, list):
+        return entry.links[0].get("href", "")
+    elif hasattr(entry, "id"):
+        return entry.id
+    return ""
+
 @app.route("/smart_news")
 def smart_news():
     feed = feedparser.parse(RSS_URL)
@@ -91,23 +99,39 @@ def smart_news():
             summary = clean_html(entry.get("summary", ""))
             source = entry.get("source", {}).get("title", "Unknown")
             relevance = get_relevance_score(entry)
+            link = get_entry_link(entry)
+            if not link:
+                continue
+            link = link.replace("&amp;", "&")
             grouped_by_source[source].append({
                 "title": entry.title,
                 "translated_title": translate(entry.title),
                 "summary": summary,
                 "translated_summary": translate(summary),
-                "link": entry.link,
-                "markdown_link": f"[點我看原文]({entry.link})",
+                "link": link,
+                "markdown_link": f"[點我看原文]({link})",
                 "published": published.date().isoformat(),
                 "published_datetime": published,
                 "source": source,
                 "relevance": relevance
             })
 
-    all_news = []
-    for source in grouped_by_source:
-        entries = sorted(grouped_by_source[source], key=lambda x: (-x["relevance"], -x["published_datetime"].timestamp()))
-        all_news.extend(entries[:SOURCE_LIMIT])
+    selected_news = []
+    for source, entries in grouped_by_source.items():
+        limit = 5 if source in PREFERRED_SOURCES else 3
+        sorted_entries = sorted(entries, key=lambda x: (-x["relevance"], -x["published_datetime"].timestamp()))
+        selected_news.extend(sorted_entries[:limit])
+
+    relevant_news = [n for n in selected_news if n["relevance"] > 0]
+    fallback_news = [n for n in selected_news if n["relevance"] == 0]
+
+    if len(relevant_news) < 8:
+        need = 8 - len(relevant_news)
+        relevant_news += fallback_news[:need]
+        fallback_news = fallback_news[need:]
+
+    final_news = relevant_news + fallback_news
+    final_news = final_news[:TOTAL_LIMIT]
 
     def sort_key(item):
         try:
@@ -116,7 +140,8 @@ def smart_news():
             priority = len(PREFERRED_SOURCES)
         return (priority, -item["relevance"], -item["published_datetime"].timestamp())
 
-    sorted_news = sorted(all_news, key=sort_key)[:TOTAL_LIMIT]
+    sorted_news = sorted(final_news, key=sort_key)
+
     for news in sorted_news:
         del news["published_datetime"]
         del news["relevance"]
@@ -139,7 +164,7 @@ def get_news_by_link():
                 "content": summary,
                 "published": get_published_time(entry).date().isoformat(),
                 "source": entry.get("source", {}).get("title", "Unknown"),
-                "link": entry.link
+                "link": url
             })
     return jsonify({"error": "Article not found", "link": url}), 404
 
@@ -154,15 +179,19 @@ def search_news():
         title = entry.title
         summary = clean_html(entry.get("summary", ""))
         if keyword.lower() in title.lower() or keyword.lower() in summary.lower():
+            link = get_entry_link(entry)
+            if not link:
+                continue
+            link = link.replace("&amp;", "&")
             results.append({
                 "title": title,
                 "translated_title": translate(title),
                 "summary": summary,
                 "translated_summary": translate(summary),
-                "link": entry.link,
+                "link": link,
                 "published": get_published_time(entry).date().isoformat(),
                 "source": entry.get("source", {}).get("title", "Unknown"),
-                "markdown_link": f"[點我看原文]({entry.link})"
+                "markdown_link": f"[點我看原文]({link})"
             })
         if len(results) >= 10:
             break
